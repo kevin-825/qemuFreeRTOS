@@ -1,3 +1,3 @@
 SRC += \
-heap0.c\
-panic.c
+lib/heap0.c\
+lib/panic.c

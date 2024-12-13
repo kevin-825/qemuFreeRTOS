@@ -25,16 +25,27 @@ check_and_install_jq() {
     fi
 }
 
+# Function to check if make is installed
+check_make() {
+    if ! command -v make &> /dev/null; then
+        echo "Error: make is not installed. Please install it and try again."
+        exit 1
+    fi
+}
+
 # Check and install jq if necessary
 check_and_install_jq
 
+# Check if make is installed
+check_make
+
 # Function to display help message
 display_help() {
-    echo "Usage: $0 [-b <architecture> <build_type>] [-c <architecture>] [-h]"
+    echo "Usage: $0 [-b <architecture> <build_type>] [-c [<architecture>]] [-h]"
     echo
     echo "Options:"
     echo "  -b <architecture> <build_type>    Build the project for the specified architecture and build type."
-    echo "  -c <architecture>                 Clean the build directory or specific architecture subdirectory."
+    echo "  -c [<architecture>]               Clean the build directory or specific architecture subdirectory."
     echo "  -h                                Display this help message."
     echo
     echo "Architectures:"
@@ -48,15 +59,15 @@ display_help() {
 # Function to clean the build directory
 clean_build() {
     CONFIG_FILE="config.json"
-    BUILD_DIR=$(jq -r ".build_dir" $CONFIG_FILE)
+    TARGET_DIR=$(jq -r ".build_dir" $CONFIG_FILE)/$(ARCH)
     ARCH=$1
     if [ -z "$ARCH" ]; then
-        echo "Cleaning entire build directory: $BUILD_DIR"
-        rm -rf $BUILD_DIR
+        echo "Cleaning entire build directory: $(TARGET_DIR)"
+        rm -rf $(TARGET_DIR)
         echo "Clean complete."
     else
         echo "Cleaning build directory for architecture: $ARCH"
-        rm -rf $BUILD_DIR/$ARCH
+        rm -rf $(TARGET_DIR)
         echo "Clean complete for architecture: $ARCH"
     fi
 }
@@ -73,11 +84,12 @@ build_project() {
 
     # Read JSON configuration
     CONFIG_FILE="config.json"
-    BUILD_DIR=$(jq -r ".build_dir" $CONFIG_FILE)
+    TARGET_DIR=$(jq -r ".build_dir" $CONFIG_FILE)/$(ARCH)
     TARGET_NAME=$(jq -r ".target_name" $CONFIG_FILE)
     MAJOR_VERSION=$(jq -r ".version.major" $CONFIG_FILE)
     MINOR_VERSION=$(jq -r ".version.minor" $CONFIG_FILE)
     BUILD_NUMBER=$(jq -r ".version.build_number" $CONFIG_FILE)
+    INCREMENT_BUILD_NUMBER=$(jq -r ".version.increment_build_number" $CONFIG_FILE)
     DEBUG=$(jq -r ".features.debug" $CONFIG_FILE)
     OPTIMIZATION=$(jq -r ".features.optimization" $CONFIG_FILE)
     CC=$(jq -r ".architectures[\"$ARCH\"].toolchain.CC" $CONFIG_FILE)
@@ -87,29 +99,31 @@ build_project() {
     LDFLAGS=$(jq -r ".architectures[\"$ARCH\"].ldflags" $CONFIG_FILE)
     ENV_PATH=$(jq -r ".architectures[\"$ARCH\"].env.PATH" $CONFIG_FILE)
 
-    # Increment the build number
-    NEW_BUILD_NUMBER=$((BUILD_NUMBER + 1))
-    if [ $NEW_BUILD_NUMBER -gt 1000 ]; then
-        NEW_BUILD_NUMBER=0
+    # Increment the build number if the flag is true
+    if [ "$INCREMENT_BUILD_NUMBER" = true ]; then
+        NEW_BUILD_NUMBER=$((BUILD_NUMBER + 1))
+        if [ $NEW_BUILD_NUMBER -gt 1000 ]; then
+            NEW_BUILD_NUMBER=0
+        fi
+
+        # Update the build number in the JSON file
+        jq ".version.build_number = $NEW_BUILD_NUMBER" $CONFIG_FILE > tmp.$$.json && mv tmp.$$.json $CONFIG_FILE
     fi
 
     # Construct the version variable
-    VERSION="${MAJOR_VERSION}.${MINOR_VERSION}.${NEW_BUILD_NUMBER}"
+    VERSION="${MAJOR_VERSION}.${MINOR_VERSION}.${BUILD_NUMBER}"
 
     # Construct the target variable
     TARGET="${TARGET_NAME}_${ARCH}_v${VERSION}"
-
-    # Update the build number in the JSON file
-    jq ".version.build_number = $NEW_BUILD_NUMBER" $CONFIG_FILE > tmp.$$.json && mv tmp.$$.json $CONFIG_FILE
 
     # Export environment variables
     export PATH=$ENV_PATH
 
     # Include additional features in CFLAGS
-    if [ "$DEBUG" = "true" ];then
+    if [ "$DEBUG" = "true" ]; then
         CFLAGS="$CFLAGS -g"
     fi
-    if [ -n "$OPTIMIZATION" ];then
+    if [ -n "$OPTIMIZATION" ]; then
         CFLAGS="$CFLAGS -$OPTIMIZATION"
     fi
 
@@ -122,10 +136,11 @@ build_project() {
     fi
 
     # Invoke the Makefile
-    make ARCH=$ARCH BUILD_TYPE=$BUILD_TYPE CC=$CC AS=$AS SIZE=$SIZE CFLAGS="$CFLAGS" LDFLAGS="$LDFLAGS" BUILD_DIR=$BUILD_DIR TARGET=$TARGET
+    make TARGET_DIR=$TARGET_DIR ARCH=$ARCH BUILD_TYPE=$BUILD_TYPE CC=$CC AS=$AS SIZE=$SIZE CFLAGS="$CFLAGS" LDFLAGS="$LDFLAGS" TARGET=$TARGET
 }
 
 # Parse command line options
+CLEAN_ARCH=""
 while getopts "b:c:h" opt; do
     case ${opt} in
         b)
@@ -138,8 +153,10 @@ while getopts "b:c:h" opt; do
             BUILD=true
             ;;
         c)
-            CLEAN_ARCH=$OPTARG
             CLEAN=true
+            if [ -n "$OPTARG" ]; then
+                CLEAN_ARCH=$OPTARG
+            fi
             ;;
         h)
             display_help
@@ -149,6 +166,8 @@ while getopts "b:c:h" opt; do
             ;;
     esac
 done
+
+shift $((OPTIND - 1))
 
 # Execute based on options
 if [ "$CLEAN" = true ]; then

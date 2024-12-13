@@ -7,38 +7,44 @@ AS := $(AS)
 SIZE := $(SIZE)
 
 # Directories
-SRC :=
+SRC :=  # Define SRC as a collection of .c files
 INC_DIR :=
+TARGET_DIR := $(BUILD_DIR)/$(ARCH)
 ARCH := $(ARCH)
-BUILD_DIR := $(BUILD_DIR)/$(ARCH)
 include include.mk
-$(info  SRC:${SRC})
-$(info  INC_DIR:${INC_DIR})
+$(info  SRC:$(SRC))
+$(info  INC_DIR:$(INC_DIR))
+$(info  TARGET_DIR:$(TARGET_DIR))
 # Source files
-C_SRCS := $(wildcard $(SRC)/**/*.c)
-ASM_SRCS := $(wildcard $(SRC)/**/*.s)
-OBJS := $(patsubst $(SRC)/%.c, $(BUILD_DIR)/%.o, $(C_SRCS)) $(patsubst $(SRC)/%.s, $(BUILD_DIR)/%.o, $(ASM_SRCS))
+C_SRCS := $(SRC)
+#ASM_SRCS := $(wildcard $(INC_DIR)/**/*.s)  # Assuming assembly sources are listed similarly
+#OBJS := $(patsubst %.c, $(TARGET_DIR)/%.o, $(notdir $(C_SRCS))) $(patsubst $(SRC)/%.s, $(TARGET_DIR)/%.o, $(ASM_SRCS))
+OBJS := $(patsubst %.c,$(TARGET_DIR)/%.o,$(SRC)) $(patsubst %.s,$(TARGET_DIR)/%.o,$(ASM_SRCS))
 DEPS := $(OBJS:.o=.d)
 
+$(info  C_SRCS:$(C_SRCS))
+$(info  OBJS:$(OBJS))
+$(info  ASM_SRCS:$(ASM_SRCS))
+$(info  DEPS:$(DEPS))
 # Compiler and linker flags
 CFLAGS := $(CFLAGS) $(foreach dir, $(INC_DIR), -I$(dir))
 LDFLAGS := $(LDFLAGS)
 
 # Create build directories
-$(BUILD_DIR):
-	mkdir -p $(BUILD_DIR)
-
+$(TARGET_DIR)/%: 
+	@mkdir -p $(@D)
 # Build rules
-$(BUILD_DIR)/%.o: $(SRC)/%.c | $(BUILD_DIR)
+$(TARGET_DIR)/%.o: %.c | $(TARGET_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/%.o: $(SRC)/%.s | $(BUILD_DIR)
+$(TARGET_DIR)/%.o: %.s | $(TARGET_DIR)
 	$(AS) -c $< -o $@
 
-$(TARGET): $(BUILD_DIR) $(OBJS)
-	$(CC) $(OBJS) $(LDFLAGS) -o $(BUILD_DIR)/$(TARGET)
+# Link objects to create target
+$(TARGET): $(OBJS)
+	$(CC) $(OBJS) $(LDFLAGS) -o $(TARGET_DIR)/$(TARGET)
 
 clean:
-	rm -rf $(BUILD_DIR)
+	rm -rf $(TARGET_DIR)
 
 -include $(DEPS)
