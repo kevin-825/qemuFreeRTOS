@@ -1,0 +1,9 @@
+{
+    "files.associations": {
+        "compare": "c",
+        "fact.h": "c",
+        "stdint.h": "c",
+        "cstdio": "c",
+        "stdlib.h": "c"
+    }
+}
