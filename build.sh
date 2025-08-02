@@ -1,5 +1,7 @@
 #!/bin/bash
 
+echo -e "\n"
+
 # Function to check if jq is installed
 check_and_install_jq() {
     if ! command -v jq &> /dev/null; then
@@ -20,7 +22,7 @@ check_and_install_jq() {
             sudo pkg install jq
         else
             echo "Unsupported OS. Please install jq manually."
-            exit 1
+            # exit 1
         fi
     fi
 }
@@ -59,7 +61,7 @@ display_help() {
 # Function to clean the build directory
 clean_build() {
     CONFIG_FILE="config.json"
-    TARGET_DIR=$(jq -r ".build_dir" $CONFIG_FILE)/$(ARCH)
+    TARGET_DIR=$(jq -r ".build_dir" $CONFIG_FILE)/${ARCH}
     ARCH=$1
     if [ -z "$ARCH" ]; then
         echo "Cleaning entire build directory: $(TARGET_DIR)"
@@ -84,7 +86,7 @@ build_project() {
 
     # Read JSON configuration
     CONFIG_FILE="config.json"
-    TARGET_DIR=$(jq -r ".build_dir" $CONFIG_FILE)/$(ARCH)
+    TARGET_DIR=$(jq -r ".build_dir" $CONFIG_FILE)/${ARCH}
     TARGET_NAME=$(jq -r ".target_name" $CONFIG_FILE)
     MAJOR_VERSION=$(jq -r ".version.major" $CONFIG_FILE)
     MINOR_VERSION=$(jq -r ".version.minor" $CONFIG_FILE)
@@ -117,7 +119,7 @@ build_project() {
     TARGET="${TARGET_NAME}_${ARCH}_v${VERSION}"
 
     # Export environment variables
-    export PATH=$ENV_PATH
+    export PATH=$ENV_PATH:$PATH
 
     # Include additional features in CFLAGS
     if [ "$DEBUG" = "true" ]; then
